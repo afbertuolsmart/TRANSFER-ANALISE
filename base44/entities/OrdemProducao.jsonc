@@ -1,0 +1,41 @@
+{
+  "name": "OrdemProducao",
+  "type": "object",
+  "properties": {
+    "nro_op": {
+      "type": "number"
+    },
+    "produto": {
+      "type": "number"
+    },
+    "desc_completa": {
+      "type": "string"
+    },
+    "grupo": {
+      "type": "number"
+    },
+    "subgrupo": {
+      "type": "number"
+    },
+    "qtd_produzir": {
+      "type": "number"
+    },
+    "dt_entr": {
+      "type": "string"
+    },
+    "familia": {
+      "type": "string"
+    },
+    "cor": {
+      "type": "string"
+    },
+    "origem": {
+      "type": "string",
+      "enum": [
+        "Importado",
+        "Nacional"
+      ]
+    }
+  },
+  "required": []
+}

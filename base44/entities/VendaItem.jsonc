@@ -1,0 +1,79 @@
+{
+  "name": "VendaItem",
+  "type": "object",
+  "properties": {
+    "dt_entrada": {
+      "type": "string"
+    },
+    "dt_faturam": {
+      "type": "string"
+    },
+    "produto": {
+      "type": "number"
+    },
+    "desc_completa": {
+      "type": "string"
+    },
+    "pedido": {
+      "type": "number"
+    },
+    "cfop": {
+      "type": "number"
+    },
+    "cliente": {
+      "type": "number"
+    },
+    "razao_social": {
+      "type": "string"
+    },
+    "qtd_faturada": {
+      "type": "number"
+    },
+    "qtd_item": {
+      "type": "number"
+    },
+    "nota": {
+      "type": "number"
+    },
+    "vlr_un": {
+      "type": "number"
+    },
+    "vlr_liq_item": {
+      "type": "number"
+    },
+    "sig_emp": {
+      "type": "string"
+    },
+    "posicao_item": {
+      "type": "string"
+    },
+    "representante": {
+      "type": "number"
+    },
+    "abreviacao": {
+      "type": "string"
+    },
+    "vlr_comissao_rep": {
+      "type": "number"
+    },
+    "grupo": {
+      "type": "number"
+    },
+    "subgrupo": {
+      "type": "number"
+    },
+    "familia": {
+      "type": "string"
+    },
+    "cor": {
+      "type": "string"
+    },
+    "origem": {
+      "type": "string",
+      "enum": [
+        "Importado",
+        "Nacional"
+      ]
+    }
+  }
+}

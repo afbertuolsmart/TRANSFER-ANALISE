@@ -1,0 +1,43 @@
+{
+  "name": "ConsumoItem",
+  "type": "object",
+  "properties": {
+    "cod_prod": {
+      "type": "number"
+    },
+    "desc_completa": {
+      "type": "string"
+    },
+    "grupo": {
+      "type": "number"
+    },
+    "subgrupo": {
+      "type": "number"
+    },
+    "orig_movto": {
+      "type": "number"
+    },
+    "descr_orig_movto": {
+      "type": "string"
+    },
+    "qtd_movimentada": {
+      "type": "number"
+    },
+    "dt_movto": {
+      "type": "string"
+    },
+    "familia": {
+      "type": "string"
+    },
+    "cor": {
+      "type": "string"
+    },
+    "origem": {
+      "type": "string",
+      "enum": [
+        "Importado",
+        "Nacional"
+      ]
+    }
+  }
+}

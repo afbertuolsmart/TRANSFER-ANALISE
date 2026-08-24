@@ -1,0 +1,52 @@
+{
+  "name": "EstoqueItem",
+  "type": "object",
+  "properties": {
+    "produto": {
+      "type": "number"
+    },
+    "cod_altern_1": {
+      "type": "string"
+    },
+    "desc_completa": {
+      "type": "string"
+    },
+    "qtd_fisica": {
+      "type": "number"
+    },
+    "un": {
+      "type": "string"
+    },
+    "vlr_tot_est": {
+      "type": "number"
+    },
+    "grupo": {
+      "type": "number"
+    },
+    "subgrupo": {
+      "type": "number"
+    },
+    "abreviacao": {
+      "type": "string"
+    },
+    "sig_emp": {
+      "type": "string"
+    },
+    "colecao": {
+      "type": "string"
+    },
+    "familia": {
+      "type": "string"
+    },
+    "cor": {
+      "type": "string"
+    },
+    "origem": {
+      "type": "string",
+      "enum": [
+        "Importado",
+        "Nacional"
+      ]
+    }
+  }
+}

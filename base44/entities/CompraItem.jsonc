@@ -1,0 +1,58 @@
+{
+  "name": "CompraItem",
+  "type": "object",
+  "properties": {
+    "num_oc": {
+      "type": "number"
+    },
+    "forn": {
+      "type": "number"
+    },
+    "razao_social": {
+      "type": "string"
+    },
+    "dt_emiss": {
+      "type": "string"
+    },
+    "produto": {
+      "type": "number"
+    },
+    "grupo": {
+      "type": "number"
+    },
+    "subgrupo": {
+      "type": "number"
+    },
+    "desc_completa": {
+      "type": "string"
+    },
+    "qtde": {
+      "type": "number"
+    },
+    "qtd_aberto": {
+      "type": "number"
+    },
+    "vlr_un": {
+      "type": "number"
+    },
+    "dt_orig_ent": {
+      "type": "string"
+    },
+    "dt_prazo_ent": {
+      "type": "string"
+    },
+    "familia": {
+      "type": "string"
+    },
+    "cor": {
+      "type": "string"
+    },
+    "origem": {
+      "type": "string",
+      "enum": [
+        "Importado",
+        "Nacional"
+      ]
+    }
+  }
+}
