@@ -2,11 +2,14 @@ import React, { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+
 import {
   fmtQty,
   calcCobertura,
   getWindowValue
 } from "@/lib/dashboardData";
+
+import { ConsumptionChart } from "./ConsumptionChart";
 
 const WINDOWS = [
   { key: "consumo_1m", label: "Último mês" },
@@ -19,7 +22,11 @@ export function ColorAnalysisPanel({ item, onBack }) {
 
   const [windowKey, setWindowKey] = useState("consumo_12m");
 
-  const consumo = getWindowValue(item, windowKey, "consumo");
+  const consumo = getWindowValue(
+    item,
+    windowKey,
+    "consumo"
+  );
 
   const meses =
     windowKey === "consumo_1m"
@@ -35,7 +42,6 @@ export function ColorAnalysisPanel({ item, onBack }) {
   const cobertura = calcCobertura(item);
 
   return (
-
     <Card className="p-6">
 
       <Button
@@ -57,7 +63,8 @@ export function ColorAnalysisPanel({ item, onBack }) {
       </p>
 
       <div className="flex gap-2 mb-6">
-        {WINDOWS.map(w => (
+
+        {WINDOWS.map((w) => (
           <button
             key={w.key}
             onClick={() => setWindowKey(w.key)}
@@ -70,6 +77,7 @@ export function ColorAnalysisPanel({ item, onBack }) {
             {w.label}
           </button>
         ))}
+
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -122,7 +130,8 @@ export function ColorAnalysisPanel({ item, onBack }) {
           <div className="text-2xl font-bold">
             {Number.isFinite(cobertura.coberturaMeses)
               ? cobertura.coberturaMeses.toFixed(1)
-              : "∞"} meses
+              : "∞"}{" "}
+            meses
           </div>
         </Card>
 
@@ -138,8 +147,8 @@ export function ColorAnalysisPanel({ item, onBack }) {
 
       </div>
 
+      <ConsumptionChart item={item} />
+
     </Card>
-
   );
-
 }

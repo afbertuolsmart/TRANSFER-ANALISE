@@ -1,11 +1,14 @@
+// ============================================================
+// LOAD DATA
+// ============================================================
 
 export async function loadAllData() {
   const base = import.meta.env.BASE_URL;
 
   const get = (arquivo) =>
-    fetch(`${base}data/${arquivo}.json`).then((r) =>
-      r.ok ? r.json() : []
-    );
+    fetch(`${base}data/${arquivo}.json`, {
+      cache: "no-store",
+    }).then((r) => (r.ok ? r.json() : []));
 
   const [estoque, compras, consumo] = await Promise.all([
     get("estoquetransfer"),
@@ -20,82 +23,220 @@ export async function loadAllData() {
   };
 }
 
+
+// ============================================================
+// NORMALIZAÇÃO
+// ============================================================
+
 function normalizeDesc(desc) {
-  return (desc || '').toUpperCase().trim()
-    .replace(/\s+/g, ' ')
-    .replace(/(\d[.,]\d)\s+MM/g, '$1MM');
+  return (desc || "")
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/(\d[.,]\d)\s+MM/g, "$1MM");
 }
 
 
+// ============================================================
+// CORES
+// ============================================================
+
+const MULTIWORD_COLORS = ["OFF WHITE"];
+
+function normalizeCor(cor) {
+  return (cor || "")
+    .toUpperCase()
+    .replace(/\s*-.*/g, "")
+    .replace(/\bPU\b/gi, "")
+    .replace(/\d+[.,]?\d*\s*MM/gi, "")
+    .replace(/\(.*?\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 
-const MULTIWORD_COLORS = ['OFF WHITE'];
+// ============================================================
+// LIMPEZA DE ESPECIFICAÇÕES
+// ============================================================
 
-export function buildFamiliaData(estoque) {
+function cleanSpecs(str) {
+  return (str || "")
+    .replace(/PU\s*[\d,]*\s*MM/gi, "")
+    .replace(/[\d,.]+\s*MM/gi, "")
+    .replace(/\bPU\b/gi, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+
+// ============================================================
+// EXTRAÇÃO DE FAMÍLIA
+// ============================================================
+
+function extractFamiliaWithColecao(desc, colecao) {
+  const texto = normalizeDesc(desc);
+  const colecaoNormalizada = normalizeDesc(colecao);
+
+  if (colecaoNormalizada && texto.includes(colecaoNormalizada)) {
+    return cleanSpecs(colecaoNormalizada);
+  }
+
+  if (texto.includes(" - ")) {
+    return cleanSpecs(texto.split(" - ")[0]);
+  }
+
+  return cleanSpecs(texto);
+}
+
+
+// ============================================================
+// EXTRAÇÃO DE COR
+// ============================================================
+
+function extractCor(desc, familia) {
+  const texto = normalizeDesc(desc);
+  const fam = normalizeDesc(familia);
+
+  if (texto.startsWith(fam)) {
+    return normalizeCor(texto.substring(fam.length));
+  }
+
+  if (texto.includes(" - ")) {
+    return normalizeCor(texto.split(" - ").slice(1).join(" - "));
+  }
+
+  return "";
+}
+
+
+// ============================================================
+// CONSTRUÇÃO FAMÍLIA / COR
+// ============================================================
+
+export function buildFamiliaData(estoque = []) {
   const descLookup = {};
   const knownFamilias = new Set();
 
-  // Pass 1: clean family extraction from dash descriptions
-  estoque.forEach(r => {
+  // PASSO 1
+  estoque.forEach((r) => {
     if (!r.desc_completa) return;
+
     const d = normalizeDesc(r.desc_completa);
+
     if (descLookup[d]) return;
-    if (d.includes(' - ')) {
-      const familia = cleanSpecs(d.split(' - ')[0]);
-      descLookup[d] = { familia, cor: d.split(' - ').slice(1).join(' - ').trim() };
+
+    if (d.includes(" - ")) {
+      const partes = d.split(" - ");
+
+      const familia = cleanSpecs(partes[0]);
+      const cor = normalizeCor(partes.slice(1).join(" - "));
+
+      descLookup[d] = {
+        familia,
+        cor,
+      };
+
       knownFamilias.add(familia);
     }
   });
 
-  let familiaList = [...knownFamilias].sort((a, b) => b.length - a.length);
+  let familiaList = [...knownFamilias].sort(
+    (a, b) => b.length - a.length
+  );
 
-  // Pass 2: resolve non-dash descriptions via longest-prefix match against known families
-  estoque.forEach(r => {
+  // PASSO 2
+  estoque.forEach((r) => {
     if (!r.desc_completa) return;
+
     const d = normalizeDesc(r.desc_completa);
+
     if (descLookup[d]) return;
-    const matched = familiaList.find(f => d.startsWith(f));
+
+    const matched = familiaList.find((f) =>
+      d.startsWith(f)
+    );
+
     if (matched) {
-      descLookup[d] = { familia: matched, cor: cleanSpecs(d.substring(matched.length)) };
+      descLookup[d] = {
+        familia: matched,
+        cor: normalizeCor(
+          d.substring(matched.length)
+        ),
+      };
+
       return;
     }
-    let familia, cor;
-    let mc = null;
-    for (const c of MULTIWORD_COLORS) { if (d.endsWith(' ' + c)) { mc = c; break; } }
-    if (mc) {
-      familia = cleanSpecs(d.slice(0, d.length - mc.length - 1));
-      cor = mc;
-    } else {
-      familia = extractFamiliaWithColecao(r.desc_completa, r.colecao);
-      cor = extractCor(r.desc_completa, familia);
+
+    let familia;
+    let cor;
+
+    let multiColor = null;
+
+    for (const c of MULTIWORD_COLORS) {
+      if (d.endsWith(" " + c)) {
+        multiColor = c;
+        break;
+      }
     }
-    descLookup[d] = { familia, cor };
+
+    if (multiColor) {
+      familia = cleanSpecs(
+        d.slice(
+          0,
+          d.length - multiColor.length - 1
+        )
+      );
+
+      cor = multiColor;
+    } else {
+      familia = extractFamiliaWithColecao(
+        r.desc_completa,
+        r.colecao
+      );
+
+      cor = extractCor(
+        r.desc_completa,
+        familia
+      );
+    }
+
+    descLookup[d] = {
+      familia,
+      cor,
+    };
+
     knownFamilias.add(familia);
   });
 
-  return { descLookup, familiaList: [...knownFamilias].sort((a, b) => b.length - a.length) };
+  familiaList = [...knownFamilias].sort(
+    (a, b) => b.length - a.length
+  );
+
+  return {
+    descLookup,
+    familiaList,
+  };
 }
 
-function normalizeCor(cor) {
-  return cor
-    .toUpperCase()
 
-    // Remove tudo após hífen
-    .replace(/\s*-.*/g, "")
+// ============================================================
+// FAMÍLIAS CONHECIDAS
+// ============================================================
 
-    // Remove PU
-    .replace(/\bPU\b/gi, "")
+const FAMILIAS = [
+  "NAPA MADRID",
+  "NAPA LONDON",
+  "NAPA",
+  "COURVIN",
+  "TRANSFER",
+];
 
-    // Remove espessuras
-    .replace(/\d+[.,]?\d*\s*MM/gi, "")
 
-    // Remove parênteses
-    .replace(/\(.*?\)/g, "")
+// ============================================================
+// PARSE FAMÍLIA / COR
+// ============================================================
 
-    // Espaços
-    .replace(/\s+/g, " ")
-    .trim();
-}
 export function parseFamiliaCor(desc) {
   if (!desc) {
     return {
@@ -104,7 +245,9 @@ export function parseFamiliaCor(desc) {
     };
   }
 
-  const texto = cleanSpecs(normalizeDesc(desc));
+  const texto = cleanSpecs(
+    normalizeDesc(desc)
+  );
 
   const familia = [...FAMILIAS]
     .sort((a, b) => b.length - a.length)
@@ -117,33 +260,86 @@ export function parseFamiliaCor(desc) {
     };
   }
 
-const cor = normalizeCor(
+  const cor = normalizeCor(
     texto.substring(familia.length)
-);
+  );
 
-return {
-  familia,
-  cor,
-};
+  return {
+    familia,
+    cor,
+  };
 }
+
+
+// ============================================================
+// ORIGEM
+// ============================================================
 
 export function getOrigem(subgrupo) {
-  return Number(subgrupo) === 40 ? 'Importado' : 'Nacional';
+  return Number(subgrupo) === 40
+    ? "Importado"
+    : "Nacional";
 }
 
+
+// ============================================================
+// DATAS DE CONSUMO
+// ============================================================
+
 const CONSUMO_NOW = new Date();
-const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 const CONSUMO_CUTOFFS = {
-  m1: new Date(CONSUMO_NOW.getFullYear(), CONSUMO_NOW.getMonth() - 1, CONSUMO_NOW.getDate()),
-  m3: new Date(CONSUMO_NOW.getFullYear(), CONSUMO_NOW.getMonth() - 3, CONSUMO_NOW.getDate()),
-  m6: new Date(CONSUMO_NOW.getFullYear(), CONSUMO_NOW.getMonth() - 6, CONSUMO_NOW.getDate()),
-  m12: new Date(CONSUMO_NOW.getFullYear(), CONSUMO_NOW.getMonth() - 12, CONSUMO_NOW.getDate()),
+  m1: new Date(
+    CONSUMO_NOW.getFullYear(),
+    CONSUMO_NOW.getMonth() - 1,
+    CONSUMO_NOW.getDate()
+  ),
+
+  m3: new Date(
+    CONSUMO_NOW.getFullYear(),
+    CONSUMO_NOW.getMonth() - 3,
+    CONSUMO_NOW.getDate()
+  ),
+
+  m6: new Date(
+    CONSUMO_NOW.getFullYear(),
+    CONSUMO_NOW.getMonth() - 6,
+    CONSUMO_NOW.getDate()
+  ),
+
+  m12: new Date(
+    CONSUMO_NOW.getFullYear(),
+    CONSUMO_NOW.getMonth() - 12,
+    CONSUMO_NOW.getDate()
+  ),
 };
 
+
+// ============================================================
+// JANELAS DE CONSUMO
+// ============================================================
+
 export function consumoWindows(dt_movto) {
-  if (!dt_movto) return { m1: false, m3: false, m6: false, m12: true };
+  if (!dt_movto) {
+    return {
+      m1: false,
+      m3: false,
+      m6: false,
+      m12: true,
+    };
+  }
+
   const d = new Date(dt_movto);
-  if (isNaN(d.getTime())) return { m1: false, m3: false, m6: false, m12: true };
+
+  if (isNaN(d.getTime())) {
+    return {
+      m1: false,
+      m3: false,
+      m6: false,
+      m12: true,
+    };
+  }
+
   return {
     m1: d >= CONSUMO_CUTOFFS.m1,
     m3: d >= CONSUMO_CUTOFFS.m3,
@@ -151,100 +347,74 @@ export function consumoWindows(dt_movto) {
     m12: d >= CONSUMO_CUTOFFS.m12,
   };
 }
-export function getWindowValue(obj, windowKey, prefix) {
+
+
+// ============================================================
+// PEGAR VALOR DA JANELA
+// ============================================================
+
+export function getWindowValue(
+  obj,
+  windowKey,
+  prefix
+) {
   switch (windowKey) {
     case "consumo_1m":
-      return obj[`${prefix}_1m`] || 0;
+      return Number(
+        obj?.[`${prefix}_1m`] || 0
+      );
 
     case "consumo_3m":
-      return obj[`${prefix}_3m`] || 0;
+      return Number(
+        obj?.[`${prefix}_3m`] || 0
+      );
 
     case "consumo_6m":
-      return obj[`${prefix}_6m`] || 0;
+      return Number(
+        obj?.[`${prefix}_6m`] || 0
+      );
 
+    case "consumo_12m":
     default:
-      return obj[`${prefix}_12m`] || 0;
+      return Number(
+        obj?.[`${prefix}_12m`] || 0
+      );
   }
 }
 
-const WINDOW_MONTHS = { consumo_1m: 1, consumo_3m: 3, consumo_6m: 6, consumo_12m: 12 };
-const pad2 = n => String(n).padStart(2, '0');
 
-export function buildWindowTrend(consumoByDay, vendasByDay, windowKey) {
-  const months = WINDOW_MONTHS[windowKey] || 12;
-  const cutoff = CONSUMO_CUTOFFS['m' + months];
-  const granularity = months <= 1 ? 'day' : months <= 3 ? 'week' : 'month';
-
-  function bucketKey(d) {
-    if (granularity === 'day') return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    if (granularity === 'week') {
-      const tmp = new Date(d);
-      const wd = (tmp.getDay() + 6) % 7;
-      tmp.setDate(tmp.getDate() - wd);
-      return `${tmp.getFullYear()}-${pad2(tmp.getMonth() + 1)}-${pad2(tmp.getDate())}`;
-    }
-    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-  }
-  function label(k) {
-    const [y, m, d] = k.split('-');
-    if (granularity === 'month') return MONTH_LABELS[Number(m) - 1];
-    return `${d}/${m}`;
-  }
-
-  const dayMap = {};
-  Object.entries(consumoByDay || {}).forEach(([day, qty]) => {
-    const d = new Date(day.slice(0, 10) + 'T00:00:00');
-    if (d < cutoff) return;
-    const k = bucketKey(d);
-    dayMap[k] = dayMap[k] || { consumo: 0, vendas: 0 };
-    dayMap[k].consumo += qty;
-  });
-  Object.entries(vendasByDay || {}).forEach(([day, qty]) => {
-    const d = new Date(day.slice(0, 10) + 'T00:00:00');
-    if (d < cutoff) return;
-    const k = bucketKey(d);
-    dayMap[k] = dayMap[k] || { consumo: 0, vendas: 0 };
-    dayMap[k].vendas += qty;
-  });
-
-  const result = [];
-  const seen = new Set();
-  const cur = new Date(cutoff);
-  cur.setHours(0, 0, 0, 0);
-  const end = new Date(CONSUMO_NOW);
-  while (cur <= end) {
-    const k = bucketKey(cur);
-    if (!seen.has(k)) {
-      seen.add(k);
-      result.push({ label: label(k), consumo: (dayMap[k] || {}).consumo || 0, vendas: (dayMap[k] || {}).vendas || 0 });
-    }
-    if (granularity === 'day') cur.setDate(cur.getDate() + 1);
-    else if (granularity === 'week') cur.setDate(cur.getDate() + 7);
-    else cur.setMonth(cur.getMonth() + 1);
-  }
-  return result;
-}
-
-function cleanSpecs(str) {
-  return str
-    .replace(/PU\s*[\d,]*\s*MM/i, '')
-    .replace(/[\d,.]+\s*MM/i, '')
-    .replace(/\bPU\b/i, '')
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// ============================================================
+// FORMATADORES
+// ============================================================
 
 export function fmtQty(n) {
-  return (n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  return Number(n || 0).toLocaleString(
+    "pt-BR",
+    {
+      maximumFractionDigits: 1,
+    }
+  );
 }
+
 
 export function fmtMoney(n) {
-  return (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return Number(n || 0).toLocaleString(
+    "pt-BR",
+    {
+      style: "currency",
+      currency: "BRL",
+    }
+  );
 }
 
+
+// ============================================================
+// COBERTURA
+// ============================================================
+
 export function calcCobertura(item) {
-  const consumoMedioMes = (item.consumo_12m || 0) / 12;
+  const consumoMedioMes =
+    Number(item?.consumo_12m || 0) / 12;
 
   if (consumoMedioMes <= 0) {
     return {
@@ -255,21 +425,26 @@ export function calcCobertura(item) {
   }
 
   const disponivel =
-    (item.estoque || 0) +
-    (item.compras || 0);
+    Number(item?.estoque || 0) +
+    Number(item?.compras || 0);
 
-  const coberturaMeses = disponivel / consumoMedioMes;
+  const coberturaMeses =
+    disponivel / consumoMedioMes;
 
   let criticidade = "ok";
 
-  if (coberturaMeses < 1)
+  if (coberturaMeses < 1) {
     criticidade = "critico";
-  else if (coberturaMeses < 2)
+  } else if (coberturaMeses < 2) {
     criticidade = "atencao";
+  }
 
   const qtdSugerida = Math.max(
     0,
-    Math.ceil(consumoMedioMes * 2 - disponivel)
+    Math.ceil(
+      consumoMedioMes * 2 -
+      disponivel
+    )
   );
 
   return {
@@ -279,224 +454,300 @@ export function calcCobertura(item) {
   };
 }
 
+
+// ============================================================
+// AGREGAÇÃO PRINCIPAL
+// ============================================================
+
 export function aggregateData(rawData) {
   const familias = {};
 
+  // ----------------------------------------------------------
+  // FAMÍLIA
+  // ----------------------------------------------------------
+
   function getFamilia(nome) {
+    const familiaNome =
+      nome || "SEM FAMÍLIA";
 
-  if (!familias[nome]) {
+    if (!familias[familiaNome]) {
+      familias[familiaNome] = {
+        familia: familiaNome,
 
-    familias[nome] = {
+        estoque: 0,
+        compras: 0,
+        consumo: 0,
 
-      familia: nome,
+        consumo_1m: 0,
+        consumo_3m: 0,
+        consumo_6m: 0,
+        consumo_12m: 0,
 
-      estoque: 0,
+        produtos: {},
+        cores: {},
+      };
+    }
 
-      compras: 0,
-
-      consumo: 0,
-
-      consumo_1m: 0,
-      consumo_3m: 0,
-      consumo_6m: 0,
-      consumo_12m: 0,
-
-      produtos: {}
-
-    };
-
+    return familias[familiaNome];
   }
 
-  return familias[nome];
 
-}
+  // ----------------------------------------------------------
+  // PRODUTO / ITEM
+  // ----------------------------------------------------------
 
-function getProduto(familia, codigo, descricao) {
+  function getProduto(
+    familia,
+    codigo,
+    descricao
+  ) {
+    const produtoCodigo =
+      codigo || "SEM CÓDIGO";
 
-  if (!familia.produtos[codigo]) {
+    if (!familia.produtos[produtoCodigo]) {
+      familia.produtos[produtoCodigo] = {
+        codigo: produtoCodigo,
 
-    familia.produtos[codigo] = {
+        descricao:
+          descricao ||
+          "Sem descrição",
 
-      codigo,
+        estoque: 0,
+        compras: 0,
+        consumo: 0,
 
-      descricao,
+        consumo_1m: 0,
+        consumo_3m: 0,
+        consumo_6m: 0,
+        consumo_12m: 0,
+      };
+    }
 
-      estoque: 0,
-
-      compras: 0,
-
-      consumo: 0,
-
-      consumo_1m: 0,
-      consumo_3m: 0,
-      consumo_6m: 0,
-      consumo_12m: 0
-
-    };
-
+    return familia.produtos[produtoCodigo];
   }
 
-  return familia.produtos[codigo];
 
-}
+  // ----------------------------------------------------------
+  // COR
+  // ----------------------------------------------------------
 
   function getCor(familia, nome) {
+    const nomeCor =
+      nome || "SEM COR";
 
-  if (!familia.cores[nome]) {
+    if (!familia.cores[nomeCor]) {
+      familia.cores[nomeCor] = {
+        cor: nomeCor,
 
-    familia.cores[nome] = {
+        estoque: 0,
+        compras: 0,
+        consumo: 0,
 
-      cor: nome,
+        consumo_1m: 0,
+        consumo_3m: 0,
+        consumo_6m: 0,
+        consumo_12m: 0,
 
-      estoque: 0,
-      compras: 0,
-      consumo: 0,
+        itens: [],
+      };
+    }
 
-      consumo_1m: 0,
-      consumo_3m: 0,
-      consumo_6m: 0,
-      consumo_12m: 0,
-
-      itens: []
-
-    };
-
+    return familia.cores[nomeCor];
   }
 
-  return familia.cores[nome];
 
-}
-
-  // =========================
+  // ==========================================================
   // ESTOQUE
-  // =========================
+  // ==========================================================
 
- rawData.estoque.forEach(r => {
+  (rawData.estoque || []).forEach((r) => {
+    const familia = getFamilia(
+      r.familia
+    );
 
-  const fam = getFamilia(r.familia);
+    const item = getProduto(
+      familia,
+      r.produto ||
+        r.cod_prod ||
+        r.codigo,
+      r.desc_completa ||
+        r.descricao
+    );
 
-  const item = getProduto(
-    fam,
-    r.produto,
-    r.desc_completa
-  );
+    const qtd = Number(
+      r.qtd_fisica || 0
+    );
 
-  const qtd = Number(r.qtd_fisica || 0);
-
-  fam.estoque += qtd;
-
-  item.estoque += qtd;
-
-});
-
-// =========================
-// COMPRAS
-// =========================
-
-rawData.compras.forEach(r => {
-
-  const fam = getFamilia(r.familia);
-
-  const item = getProduto(
-    fam,
-    r.produto,
-    r.desc_completa
-  );
-
-  const qtd = Number(r.qtd_aberto || 0);
-
-  fam.compras += qtd;
-
-  item.compras += qtd;
-
-});
-
-// =========================
-// CONSUMO
-// =========================
-
-rawData.consumo.forEach(r => {
-
-  const fam = getFamilia(r.familia);
-
-  const item = getProduto(
-    fam,
-    r.cod_prod || r.produto,
-    r.desc_completa || r.descricao
-  );
-
-  const qtd = Number(r.qtd_movimentada || 0);
-
-  fam.consumo += qtd;
-
-  item.consumo += qtd;
-
-  const w = consumoWindows(r.dt_movto);
-
-  if (w.m1) {
-    fam.consumo_1m += qtd;
-    item.consumo_1m += qtd;
-  }
-
-  if (w.m3) {
-    fam.consumo_3m += qtd;
-    item.consumo_3m += qtd;
-  }
-
-  if (w.m6) {
-    fam.consumo_6m += qtd;
-    item.consumo_6m += qtd;
-  }
-
-  fam.consumo_12m += qtd;
-  item.consumo_12m += qtd;
-
-});
+    familia.estoque += qtd;
+    item.estoque += qtd;
+  });
 
 
-return Object.values(familias)
-  .map(f => {
+  // ==========================================================
+  // COMPRAS
+  // ==========================================================
 
-    f.estoqueGeral = f.estoque + f.compras;
+  (rawData.compras || []).forEach((r) => {
+    const familia = getFamilia(
+      r.familia
+    );
 
-    f.produtos = Object.values(f.produtos)
-      .sort((a, b) => b.estoque - a.estoque);
+    const item = getProduto(
+      familia,
+      r.produto ||
+        r.cod_prod ||
+        r.codigo,
+      r.desc_completa ||
+        r.descricao
+    );
 
-    return f;
+    const qtd = Number(
+      r.qtd_aberto || 0
+    );
 
-  })
-  .sort((a, b) => b.estoqueGeral - a.estoqueGeral);
+    familia.compras += qtd;
+    item.compras += qtd;
+  });
 
+
+  // ==========================================================
+  // CONSUMO
+  //
+  // IMPORTANTE:
+  // Este bloco existe SOMENTE UMA VEZ.
+  // ==========================================================
+
+  (rawData.consumo || []).forEach((r) => {
+    const familia = getFamilia(
+      r.familia
+    );
+
+    const item = getProduto(
+      familia,
+
+      r.cod_prod ||
+        r.produto ||
+        r.codigo,
+
+      r.desc_completa ||
+        r.descricao
+    );
+
+    const qtd = Number(
+      r.qtd_movimentada || 0
+    );
+
+    // ------------------------------------
+    // CONSUMO TOTAL
+    // ------------------------------------
+
+    familia.consumo += qtd;
+    item.consumo += qtd;
+
+    // ------------------------------------
+    // JANELAS
+    // ------------------------------------
+
+    const w = consumoWindows(
+      r.dt_movto
+    );
+
+    if (w.m1) {
+      familia.consumo_1m += qtd;
+      item.consumo_1m += qtd;
+    }
+
+    if (w.m3) {
+      familia.consumo_3m += qtd;
+      item.consumo_3m += qtd;
+    }
+
+    if (w.m6) {
+      familia.consumo_6m += qtd;
+      item.consumo_6m += qtd;
+    }
+
+    if (w.m12) {
+      familia.consumo_12m += qtd;
+      item.consumo_12m += qtd;
+    }
+  });
+
+
+  // ==========================================================
+  // FINALIZAÇÃO
+  // ==========================================================
+
+  return Object.values(familias)
+    .map((familia) => {
+
+      familia.estoqueGeral =
+        familia.estoque +
+        familia.compras;
+
+      familia.produtos =
+        Object.values(
+          familia.produtos
+        )
+        .sort(
+          (a, b) =>
+            b.consumo_12m -
+            a.consumo_12m
+        );
+
+      familia.cores =
+        Object.values(
+          familia.cores
+        );
+
+      return familia;
+    })
+    .sort(
+      (a, b) =>
+        b.estoqueGeral -
+        a.estoqueGeral
+    );
 }
+
+
+// ============================================================
+// RESUMO
+// ============================================================
 
 export function getSummary(rawData) {
-
   let estoque = 0;
   let compras = 0;
   let consumo = 0;
 
-  rawData.estoque.forEach(r=>{
-    estoque += Number(r.qtd_fisica || 0);
-  });
+  (rawData.estoque || []).forEach(
+    (r) => {
+      estoque += Number(
+        r.qtd_fisica || 0
+      );
+    }
+  );
 
-  rawData.compras.forEach(r=>{
-    compras += Number(r.qtd_aberto || 0);
-  });
+  (rawData.compras || []).forEach(
+    (r) => {
+      compras += Number(
+        r.qtd_aberto || 0
+      );
+    }
+  );
 
-  rawData.consumo.forEach(r=>{
-    consumo += Number(r.qtd_movimentada || 0);
-  });
+  (rawData.consumo || []).forEach(
+    (r) => {
+      consumo += Number(
+        r.qtd_movimentada || 0
+      );
+    }
+  );
 
   return {
-
     estoque,
-
     compras,
-
     consumo,
-
-    estoqueGeral: estoque + compras
-
+    estoqueGeral:
+      estoque + compras,
   };
-
 }
